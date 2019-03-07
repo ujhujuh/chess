@@ -1,0 +1,453 @@
+<html>
+    <meta charset="utf-8" />
+    <style>
+        body{
+            background:url("./bg.png") right top no-repeat;
+            background-size: 128%;
+            /* opacity: 0.5; */
+        }
+    </style>
+    <body>
+        <!-- 播放音乐 -->
+        <!-- <audio src="./高山流水.mp3" autoplay="autoplay"></audio> -->
+        <div style="height: 20px; width: 500px; margin: 0 auto;">
+            <button onclick="repentChess()">悔棋</button>
+            <button onclick="initChess()">清空</button>
+            <button onclick="saveChess()">保存</button>
+            <button onclick="fightWithRobot()">人机对战</button>
+            <select style="margin-left: 50px;"></select>
+            <button onclick="loadChess()">载入</button>
+            <span></span>
+        </div>
+        <div style="margin:0  auto; width: 800px; margin-top: 25px; cursor: pointer;">
+            <canvas id="myCanvas" width="900" height="700"></canvas>
+        </div>
+    </body>
+</html>
+
+<script src="./jquery.js"></script>
+<script src="./chess.js"></script>
+<script>
+    // storage存储保存的棋局
+    let storage = window.localStorage;
+    //获取Canvas对象(画布)
+    const canvas = document.getElementById("myCanvas");
+    const ctx = canvas.getContext("2d");
+
+    let isWin = false;
+    let flag = true; // 黑子先行
+    let array = []; // 存储棋局
+    let history = []; // 存储历史棋子
+    let isRobot = false; // 是否为人机对战
+
+    // 偏离位置
+    // 查找下棋坐标位置, 以(width/2 - 400, 60)为基准
+    let width = $(window).width();
+    let pointX = width/2 - 400;
+    let dx = 50, dy = 25;
+    
+    $(function() {
+        // 初始化棋盘
+        initBoard();  
+
+        // 初始化棋局
+        for (let i = 0; i <= 12; i ++) {
+            array[i] = new Array();
+            for (let j = 0; j <= 16; j ++) {
+                array[i][j] = null;
+            }
+        }
+
+        // 从localStorage获取棋局
+        initSelect();
+        
+        $(document).mousedown(function(e) {
+            // $("span").html("X:" + e.pageX + "Y:" + e.pageY + "事件" + e.type);
+            let x = e.pageX, y = e.pageY;
+
+            if (isWin) {
+                return;
+            }
+
+            if (isRobot && !flag) {
+                return;
+            }
+
+            // 以（pointX, 60）为基准
+            if (x < dx + pointX - 25 || x > dx + pointX + 800 + 25 || y < dy + 60 - 25 || y > dy + 660 + 25) {
+                // alert("请在规定范围内落子");
+                return;
+            } else {
+                // 画棋子
+                drawChess(x, y);
+            }
+        });   
+    });
+
+    // 画棋盘
+    function initBoard() {
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "black";
+
+        ctx.beginPath();
+        for (let i = 0; i <= 12; i ++) {
+            ctx.moveTo(dx + 0, dy + 50 * i);
+            ctx.lineTo(dx + 800, dy + 50 * i);
+        }
+        for (let i = 0; i <= 16; i ++) {
+            ctx.moveTo(dx + 50 * i, dy + 0);
+            ctx.lineTo(dx + 50 * i, dy + 600);
+        }
+        
+    
+        ctx.stroke();
+        ctx.fill();
+        //关闭当前的绘制路径
+        ctx.closePath();
+    }
+
+    // 下棋
+    function drawChess(x, y) {
+        let realX, realY;
+        let x1 = parseInt((x - pointX - dx) / 50);
+        let x2 = (x - pointX- dx) % 50;
+        if (x2 <= 25) {
+            realX = x1 * 50;
+        } else {
+            realX = x1 * 50 + 50;
+        }
+
+        let y1 = parseInt((y - 60 - dy) / 50);
+        let y2 = (y - 60 - dy) % 50;
+        if (y2 <= 25) {
+            realY = y1 * 50;
+        } else {
+            realY = y1* 50 + 50;
+        }
+
+        // 添加数据到数组
+        let idxX = realX/50, idxY = realY/50;
+        if (array[idxY][idxX] != null) {
+            alert("该位置已经下过棋！");
+            return;
+        }
+        if (flag) {
+            array[idxY][idxX] = 1;
+        } else {
+            array[idxY][idxX] = 0;
+        }
+        console.info(realX, realY);
+
+        // 添加到history
+        let val = idxY + "," + idxX;
+        history.push(val);
+
+        // 下棋
+        ctx.beginPath();
+        if (flag) {
+            ctx.fillStyle = "black";
+        } else {
+            ctx.fillStyle = "white";
+        }
+
+        // 画棋子
+        ctx.arc(realX + dx, realY + dy, 20, 0, 2*Math.PI);
+        ctx.stroke();
+        ctx.fill();
+        ctx.closePath();
+        // 判断棋局输赢
+        analyse(idxX, idxY, flag);
+
+        flag = !flag;
+    }
+
+    function analyse (idxX, idxY, flag) {
+        let targetKey = 0;
+        if (flag) {
+            targetKey = 1;
+        }
+        console.info(array);
+        console.info(idxX, idxY, targetKey)
+
+        // 判断左右
+        let a = idxX, b = idxY, num = 0;
+        while (a >= 0) {
+            if (array[b][a] == targetKey) {
+                num ++;
+                a --;
+            } else {
+                break;
+            }
+        }
+        a = idxX;
+        while (a <= 16) {
+            if (array[b][a] == targetKey) {
+                num ++;
+                a ++;
+            } else {
+                break;
+            }
+        }
+        showResult(num);
+        
+        // 判断上下
+        a = idxX, b = idxY, num = 0;
+        while (b >= 0) {
+            if (array[b][a] == targetKey) {
+                num ++;
+                b --;
+            } else {
+                break;
+            }
+        }
+        b = idxY;
+        while (b <= 12) {
+            if (array[b][a] == targetKey) {
+                num ++;
+                b ++;
+            } else {
+                break;
+            }
+        }
+        showResult(num);
+
+        // 判断左上右下
+        a = idxX, b = idxY, num = 0;
+        while (a >= 0 && b >= 0) {
+            if (array[b][a] == targetKey) {
+                num ++;
+                a --;
+                b --;
+            } else {
+                break;
+            }
+        }
+        a = idxX, b = idxY;
+        while (a <= 16 && b <= 12) {
+            if (array[b][a] == targetKey) {
+                num ++;
+                a ++;
+                b ++;
+            } else {
+                break;
+            }
+        }
+        showResult(num);
+
+        // 判断右上左下
+        a = idxX, b = idxY, num = 0;
+        while (a >= 0 && b <= 12) {
+            if (array[b][a] == targetKey) {
+                num ++;
+                a --;
+                b ++;
+            } else {
+                break;
+            }
+        }
+        a = idxX, b = idxY;
+        while (a <= 16 && b >= 0) {
+            if (array[b][a] == targetKey) {
+                num ++;
+                a ++;
+                b --;
+            } else {
+                break;
+            }
+        }
+        showResult(num);
+        
+    }
+
+    // 显示输赢
+    function showResult(num) {
+        console.info(num);
+        if (num >= 6) {
+            let msg = "黑棋胜利！";
+            if (!flag) {
+                msg = "白棋胜利!";
+            }
+            // 显示文本
+            ctx.beginPath();
+            ctx.font="40px Arial";
+            ctx.fillStyle = 'red';
+            ctx.fillText(msg, 360, 300);
+            ctx.closePath();
+            
+            isWin = true;
+        }
+    }
+
+    // 悔棋
+    function repentChess() {
+        if (history.length <= 0) {
+            alert("不能悔棋了！");
+            return;
+        }
+        let val = history.pop();
+        let idxY = val.split(",")[0];
+        let idxX = val.split(",")[1];
+        array[idxY][idxX] = null;
+
+        ctx.beginPath();
+        // 清除棋子矩形区域
+        ctx.clearRect(dx + idxX * 50 - 25, dy + idxY * 50 -25, 50, 50);  
+        
+        // 填补棋盘线条
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "black";
+        ctx.moveTo(dx + idxX * 50 - 25, dy + idxY * 50);
+        ctx.lineTo(dx + idxX * 50 + 25, dy + idxY * 50);
+        ctx.moveTo(dx + idxX * 50, dy + idxY * 50 - 25);
+        ctx.lineTo(dx + idxX * 50, dy + idxY * 50 + 25);
+        ctx.stroke();
+        ctx.fill();
+        ctx.closePath();
+
+        // 交换棋手
+        flag = !flag;
+    }
+
+    // 清空棋局
+    function initChess() {
+        // 清除棋盘
+        ctx.clearRect(0, 0, 900, 700);  
+        // 初始化棋盘
+        initBoard();  
+
+        // 初始化棋局
+        for (let i = 0; i <= 12; i ++) {
+            array[i] = new Array();
+            for (let j = 0; j <= 16; j ++) {
+                array[i][j] = null;
+            }
+        }
+        flag = true; // 黑子先行
+        history = [];
+        isWin = false;
+        isRobot = false;
+    }
+
+    // 保存棋局
+    function saveChess() {
+        if (history.length == 0) {
+            alert("还没开始下棋，不需保存!");
+            return;
+        }
+        let name = prompt("请输入棋局名称:");
+        if (name == null) {
+            return;
+        }
+        
+        // 获取当前时间作为key, 将 array + flag + history + isWin 作为value
+        let nameKey = "chess-" + name;
+        storage.setItem(nameKey, JSON.stringify(array) + "|" + flag + "|" + JSON.stringify(history) + "|" + isWin);
+
+        alert("保存成功!");
+    }
+
+    // 获取棋局
+    function initSelect() {
+        let options = "<option value =''>请选择棋局</option>";
+        for (let i = 0; i < storage.length; i++){   
+            let key = storage.key(i); 
+            if (key.startsWith("chess-")) {
+                options += "<option value ='" + key + "'>" + key.substring(6, key.length) + "</option>";
+            }
+        }
+        $('select').html(options);
+    }
+
+    // 载入棋局
+    function loadChess() {
+        let key = $('select').val();
+        if (key == "") {
+            alert("暂无棋局"); 
+        }
+        let item = storage.getItem(key);
+        let arr = item.split('|');
+
+        array = JSON.parse(arr[0]);
+        flag = arr[1] == 'true';
+        history = JSON.parse(arr[2]);
+        isWin = arr[3] == 'true';
+        isRobot = false;
+        
+         // 清除棋盘
+         ctx.clearRect(0, 0, 900, 700);  
+        // 初始化棋盘
+        initBoard(); 
+
+        // 根据array载入棋局
+        for (let i = 0; i <= 12; i ++) {
+            for (let j = 0; j <= 16; j ++) {
+                ctx.beginPath();
+                let val = array[i][j];
+                if (val == null) {
+                    continue;
+                } else if (val == 1) {
+                    ctx.fillStyle = "black";
+                } else if (val == 0) {
+                    ctx.fillStyle = "white";
+                }
+                // 画棋子
+                ctx.arc(dx + j * 50, dy + i * 50, 20, 0, 2*Math.PI);
+                ctx.stroke();
+                ctx.fill();
+                ctx.closePath();
+            }
+        }
+
+        if (isWin) {
+            let msg = "黑棋胜利";
+            if (flag) {
+                msg = "白旗胜利";
+            }
+            // 显示文本
+            ctx.beginPath();
+            ctx.font="40px Arial";
+            ctx.fillStyle = 'red';
+            ctx.fillText(msg, 360, 300);
+            ctx.closePath();
+        }
+    }
+
+    // 开启人机对战
+    function fightWithRobot() {
+        let r = confirm("是否开启人机对战？");
+        if (!r) {
+            return;
+        }
+        initChess();
+        isRobot = true;
+        robotDrawChess();
+    }
+
+    // 人机下棋
+    function robotDrawChess() {
+        setInterval(function() {
+            if (!flag && !isWin) {
+                console.info(array)
+                console.info("robot开始下棋了")
+
+                let val = getPosition(array);
+                let i = val.split(",")[0];
+                let j = val.split(",")[1];
+                array[i][j] = 0;
+
+                // 下棋
+                ctx.beginPath();
+                ctx.fillStyle = "white";
+                ctx.arc(dx + j * 50, dy + i * 50, 20, 0, 2*Math.PI);
+                ctx.stroke();
+                ctx.fill();
+                ctx.closePath();
+
+                analyse(j, i, flag);
+                flag = !flag;
+            }
+        }, 1000);
+    }
+
+</script>
+
